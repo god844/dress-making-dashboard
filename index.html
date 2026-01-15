@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PyStudent | Learn Python</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Pyodide (Python in Browser) -->
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Marked (Markdown Parser for AI Responses) -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <!-- CodeMirror (Lightweight) Styles -->
+    <style>
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569; 
+        }
+
+        /* Editor specific styles - Larger font for students */
+        .code-font {
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            line-height: 1.6;
+        }
+        
+        .textarea-editor {
+            tab-size: 4;
+            caret-color: #38bdf8; /* Light blue cursor */
+            outline: none;
+            font-size: 16px; /* Larger base font */
+        }
+
+        /* Loading Spinner Animation */
+        .loader {
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border-top: 3px solid #38bdf8;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Markdown Styles for AI Output */
+        .prose { color: #e2e8f0; font-size: 1rem; line-height: 1.6; }
+        .prose h1, .prose h2, .prose h3 { color: #fff; font-weight: bold; margin-top: 0.5em; margin-bottom: 0.5em; }
+        .prose p { margin-bottom: 0.8em; }
+        .prose code { background: #1e293b; padding: 2px 6px; rounded: 4px; font-family: monospace; color: #7dd3fc; }
+        .prose pre { background: #0f172a; padding: 12px; border-radius: 8px; overflow-x: auto; margin-bottom: 1em; border: 1px solid #334155; }
+        .prose pre code { background: transparent; color: #e2e8f0; padding: 0; }
+        .prose ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 0.8em; }
+
+        /* Mobile specific adjustments */
+        @media (max-width: 640px) {
+            .mobile-hide { display: none; }
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans overflow-hidden h-screen flex flex-col">
+
+    <!-- Top Navigation Bar -->
+    <nav class="h-16 bg-slate-800 border-b border-slate-700 flex items-center justify-between px-4 shrink-0 z-20 shadow-md">
+        <div class="flex items-center gap-3">
+            <button id="menu-btn" class="p-2 rounded-lg hover:bg-slate-700 transition-colors md:hidden">
+                <i data-lucide="menu" class="w-6 h-6 text-slate-300"></i>
+            </button>
+            <div class="flex items-center gap-2">
+                <div class="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center font-bold text-white shadow-lg">Py</div>
+                <h1 class="text-xl font-bold tracking-wide text-white hidden sm:block">PyStudent</h1>
+            </div>
+            
+            <!-- Simplified Status -->
+            <div id="py-status" class="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900 border border-slate-700 text-xs text-yellow-400">
+                <div class="loader w-3 h-3 border-2"></div>
+                <span>Loading...</span>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2 sm:gap-3">
+             <!-- AI Assist Button -->
+            <button onclick="openAIModal()" class="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 rounded-lg font-semibold transition-all shadow-md border border-purple-400/30">
+                <i data-lucide="graduation-cap" class="w-5 h-5"></i>
+                <span class="hidden sm:inline">AI Tutor</span>
+            </button>
+
+            <!-- Clear Button -->
+            <button onclick="clearConsole()" class="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Clear Console">
+                <i data-lucide="eraser" class="w-5 h-5"></i>
+            </button>
+            
+            <!-- Run Button (Prominent) -->
+            <button onclick="runCode()" id="run-btn" class="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-5 py-2 rounded-lg font-bold text-lg transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                <i data-lucide="play" class="w-5 h-5 fill-current"></i>
+                <span class="hidden sm:inline">Run</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main Workspace -->
+    <div class="flex-1 flex overflow-hidden relative">
+        
+        <!-- Sidebar (Examples) -->
+        <aside id="sidebar" class="absolute inset-y-0 left-0 transform -translate-x-full md:relative md:translate-x-0 w-64 bg-slate-800 border-r border-slate-700 transition-transform duration-300 z-10 flex flex-col shadow-2xl md:shadow-none">
+            <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800">
+                <h2 class="font-bold text-slate-200">Examples</h2>
+                <button id="close-sidebar" class="md:hidden p-1 text-slate-400"><i data-lucide="x" class="w-6 h-6"></i></button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-2 space-y-2 bg-slate-800">
+                <button onclick="loadSnippet('hello')" class="w-full text-left p-3 rounded-lg hover:bg-slate-700 text-sm flex items-center gap-3 group transition-colors border border-transparent hover:border-slate-600">
+                    <div class="p-2 bg-blue-500/20 rounded-md text-blue-400"><i data-lucide="smile" class="w-5 h-5"></i></div>
+                    <div>
+                        <div class="font-bold text-slate-200">Hello World</div>
+                        <div class="text-xs text-slate-500">First program</div>
+                    </div>
+                </button>
+                <button onclick="loadSnippet('calc')" class="w-full text-left p-3 rounded-lg hover:bg-slate-700 text-sm flex items-center gap-3 group transition-colors border border-transparent hover:border-slate-600">
+                    <div class="p-2 bg-purple-500/20 rounded-md text-purple-400"><i data-lucide="calculator" class="w-5 h-5"></i></div>
+                    <div>
+                        <div class="font-bold text-slate-200">Calculator</div>
+                        <div class="text-xs text-slate-500">Math & Functions</div>
+                    </div>
+                </button>
+                <button onclick="loadSnippet('lists')" class="w-full text-left p-3 rounded-lg hover:bg-slate-700 text-sm flex items-center gap-3 group transition-colors border border-transparent hover:border-slate-600">
+                    <div class="p-2 bg-green-500/20 rounded-md text-green-400"><i data-lucide="list" class="w-5 h-5"></i></div>
+                    <div>
+                        <div class="font-bold text-slate-200">Shopping List</div>
+                        <div class="text-xs text-slate-500">Lists & Loops</div>
+                    </div>
+                </button>
+                 <button onclick="loadSnippet('input')" class="w-full text-left p-3 rounded-lg hover:bg-slate-700 text-sm flex items-center gap-3 group transition-colors border border-transparent hover:border-slate-600">
+                    <div class="p-2 bg-yellow-500/20 rounded-md text-yellow-400"><i data-lucide="message-square" class="w-5 h-5"></i></div>
+                    <div>
+                        <div class="font-bold text-slate-200">Ask Name</div>
+                        <div class="text-xs text-slate-500">User Input</div>
+                    </div>
+                </button>
+            </div>
+            <div class="p-4 border-t border-slate-700 text-xs text-slate-500 text-center bg-slate-800">
+                Runs instantly in browser
+            </div>
+        </aside>
+
+        <!-- Editor & Output Container -->
+        <main class="flex-1 flex flex-col md:flex-row min-w-0 bg-slate-900">
+            
+            <!-- Mobile Tab Switcher -->
+            <div class="md:hidden flex border-b border-slate-700 bg-slate-800">
+                <button onclick="switchTab('editor')" id="tab-editor" class="flex-1 py-3 text-sm font-bold text-blue-400 border-b-2 border-blue-400 transition-colors">
+                    📝 Code
+                </button>
+                <button onclick="switchTab('output')" id="tab-output" class="flex-1 py-3 text-sm font-bold text-slate-400 hover:text-slate-200 transition-colors">
+                    💻 Output
+                </button>
+            </div>
+
+            <!-- Editor Pane -->
+            <section id="pane-editor" class="flex-1 flex flex-col relative group h-full">
+                <!-- Line Numbers Container -->
+                <div class="flex-1 relative flex">
+                    <div id="line-numbers" class="w-10 bg-slate-800/50 text-slate-500 text-right pr-2 pt-4 font-mono text-base leading-6 select-none border-r border-slate-700 hidden sm:block">
+                        1
+                    </div>
+                    <!-- Actual Editor -->
+                    <textarea 
+                        id="editor" 
+                        class="flex-1 bg-[#0f172a] text-slate-200 p-4 font-mono leading-6 resize-none focus:outline-none w-full h-full textarea-editor"
+                        placeholder="Write python code here..."
+                        spellcheck="false"
+                        autocapitalize="none"
+                        autocomplete="off"
+                        autocorrect="off"
+                        oninput="updateLineNumbers()"
+                        onscroll="syncScroll()"
+                    ># Hi! Let's code.
+# Click 'Run' to start.
+
+name = "Student"
+print(f"Hello, {name}!")
+
+# Try changing the number below:
+for i in range(3):
+    print(f"Counting: {i + 1}")
+</textarea>
+                </div>
+            </section>
+
+            <!-- Output Pane -->
+            <section id="pane-output" class="flex-1 md:w-1/2 md:border-l border-slate-700 flex flex-col bg-black hidden md:flex h-full">
+                <div class="h-12 bg-slate-800 flex items-center px-4 justify-between border-b border-slate-700 shrink-0">
+                    <span class="text-sm font-bold text-slate-300 uppercase tracking-wider">Output Terminal</span>
+                    <span class="text-xs text-slate-500">Python 3.11</span>
+                </div>
+                <div id="terminal" class="flex-1 p-6 font-mono text-base overflow-auto whitespace-pre-wrap break-words text-green-400 font-bold">
+                    <div class="opacity-50 text-slate-500 mb-2 font-normal">Loading Python environment...</div>
+                </div>
+            </section>
+
+        </main>
+        
+        <!-- Overlay for Mobile Sidebar -->
+        <div id="sidebar-overlay" class="absolute inset-0 bg-black/50 z-0 hidden md:hidden glass"></div>
+
+        <!-- AI Tutor Modal -->
+        <div id="ai-modal" class="absolute inset-0 z-50 bg-black/80 hidden flex items-center justify-center p-4 backdrop-blur-sm">
+            <div class="bg-slate-800 w-full max-w-2xl rounded-xl shadow-2xl flex flex-col max-h-[85vh] border border-slate-600">
+                
+                <!-- Modal Header -->
+                <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-900/50 rounded-t-xl">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="graduation-cap" class="w-6 h-6 text-purple-400"></i>
+                        <h2 class="font-bold text-white text-lg">AI Tutor</h2>
+                    </div>
+                    <button onclick="closeAIModal()" class="text-slate-400 hover:text-white transition-colors bg-slate-700 rounded-full p-1">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+
+                <!-- Modal Body -->
+                <div class="flex-1 overflow-y-auto p-5 space-y-5">
+                    
+                    <!-- Control Buttons (Simplified) -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <button onclick="callGeminiAction('explain')" class="bg-blue-600 hover:bg-blue-500 text-white p-4 rounded-xl text-base font-bold transition-colors flex flex-col items-center gap-2 shadow-lg">
+                            <i data-lucide="book-open" class="w-6 h-6"></i> 
+                            Explain Code
+                        </button>
+                        <button onclick="callGeminiAction('debug')" class="bg-red-600 hover:bg-red-500 text-white p-4 rounded-xl text-base font-bold transition-colors flex flex-col items-center gap-2 shadow-lg">
+                            <i data-lucide="stethoscope" class="w-6 h-6"></i> 
+                            Fix Errors
+                        </button>
+                    </div>
+
+                    <div class="relative">
+                        <label class="block text-slate-400 text-sm mb-2 font-semibold">Ask a question or request code:</label>
+                        <div class="flex gap-2">
+                            <input id="ai-prompt-input" type="text" placeholder="e.g., 'How do I make a list?'" 
+                                class="flex-1 bg-slate-900 text-white border border-slate-600 rounded-lg p-3 focus:border-purple-500 focus:outline-none transition-colors">
+                            <button onclick="callGeminiGenerate()" class="bg-purple-600 rounded-lg px-4 text-white hover:bg-purple-500 transition-colors font-bold">
+                                Ask
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Output Area -->
+                    <div id="ai-output" class="bg-slate-900 rounded-xl p-4 min-h-[150px] border border-slate-700 relative">
+                        <div id="ai-placeholder" class="text-slate-500 text-center mt-10 text-sm italic">
+                            The AI Tutor is ready to help!
+                        </div>
+                        <div id="ai-loading" class="hidden absolute inset-0 flex items-center justify-center bg-slate-900/90 z-10 rounded-xl">
+                            <div class="flex flex-col items-center gap-3">
+                                <div class="loader"></div>
+                                <span class="text-sm text-slate-300 animate-pulse font-bold">Thinking...</span>
+                            </div>
+                        </div>
+                        <div id="ai-content" class="prose hidden"></div>
+                    </div>
+                </div>
+
+                <!-- Modal Footer -->
+                <div class="p-4 border-t border-slate-700 flex justify-end gap-3 bg-slate-900/50 rounded-b-xl">
+                    <button id="copy-btn" onclick="copyAIContent()" class="hidden px-4 py-2 text-sm text-slate-300 hover:text-white font-semibold">
+                        Copy
+                    </button>
+                    <button id="insert-btn" onclick="insertAICode()" class="hidden bg-green-600 hover:bg-green-500 text-white px-5 py-2 rounded-lg text-sm font-bold transition-colors shadow-lg flex items-center gap-2">
+                        <i data-lucide="plus-circle" class="w-4 h-4"></i> Insert Code
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- Gemini Integration ---
+        const apiKey = ""; // Set by environment
+        let lastGeneratedCode = "";
+
+        const aiModal = document.getElementById('ai-modal');
+        const aiOutput = document.getElementById('ai-output');
+        const aiContent = document.getElementById('ai-content');
+        const aiPlaceholder = document.getElementById('ai-placeholder');
+        const aiLoading = document.getElementById('ai-loading');
+        const insertBtn = document.getElementById('insert-btn');
+        const copyBtn = document.getElementById('copy-btn');
+        const promptInput = document.getElementById('ai-prompt-input');
+
+        function openAIModal() {
+            aiModal.classList.remove('hidden');
+        }
+
+        function closeAIModal() {
+            aiModal.classList.add('hidden');
+        }
+
+        function showAILoading() {
+            aiPlaceholder.classList.add('hidden');
+            aiContent.classList.add('hidden');
+            aiLoading.classList.remove('hidden');
+            insertBtn.classList.add('hidden');
+            copyBtn.classList.add('hidden');
+        }
+
+        function showAIResult(markdownText, isCode = false) {
+            aiLoading.classList.add('hidden');
+            aiContent.innerHTML = marked.parse(markdownText);
+            aiContent.classList.remove('hidden');
+            copyBtn.classList.remove('hidden');
+
+            // Check if code block exists
+            const codeMatch = markdownText.match(/```python([\s\S]*?)```/);
+            if (codeMatch && codeMatch[1]) {
+                lastGeneratedCode = codeMatch[1].trim();
+                insertBtn.classList.remove('hidden');
+            } else if (isCode) {
+                lastGeneratedCode = markdownText;
+                insertBtn.classList.remove('hidden');
+            } else {
+                lastGeneratedCode = "";
+                insertBtn.classList.add('hidden');
+            }
+        }
+
+        async function callGeminiGenerate() {
+            const userPrompt = promptInput.value.trim();
+            if (!userPrompt) return;
+            
+            showAILoading();
+            promptInput.value = '';
+
+            const systemPrompt = "You are a friendly Python tutor for students. Generate simple, clean Python code based on the request. Wrap code in ```python blocks. Explain steps simply.";
+            
+            try {
+                const text = await fetchGemini(userPrompt, systemPrompt);
+                showAIResult(text, true);
+            } catch (err) {
+                showAIResult(`Error: ${err.message}`);
+            }
+        }
+
+        async function callGeminiAction(type) {
+            const currentCode = editor.value;
+            if (!currentCode.trim()) {
+                alert("Please write some code first!");
+                return;
+            }
+
+            showAILoading();
+
+            let prompt = "";
+            let systemPrompt = "You are a friendly Python tutor for students. Keep explanations simple and encouraging.";
+
+            if (type === 'explain') {
+                prompt = `Explain this code simply:\n\n${currentCode}`;
+            } else if (type === 'debug') {
+                prompt = `Help me find errors in this code. If it's correct, say "Great job!". Code:\n\n${currentCode}`;
+            }
+
+            try {
+                const text = await fetchGemini(prompt, systemPrompt);
+                showAIResult(text);
+            } catch (err) {
+                showAIResult(`Error: ${err.message}`);
+            }
+        }
+
+        async function fetchGemini(userText, systemText) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            const payload = {
+                contents: [{ parts: [{ text: userText }] }],
+                systemInstruction: { parts: [{ text: systemText }] }
+            };
+
+            // Simple retry logic
+            const delays = [1000, 2000];
+            for (let i = 0; i <= delays.length; i++) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) throw new Error(response.status);
+                    const data = await response.json();
+                    return data.candidates?.[0]?.content?.parts?.[0]?.text || "I couldn't generate a response.";
+                } catch (e) {
+                    if (i === delays.length) throw e;
+                    await new Promise(r => setTimeout(r, delays[i]));
+                }
+            }
+        }
+
+        function insertAICode() {
+            if (!lastGeneratedCode) return;
+            if (editor.value.trim() === "") {
+                editor.value = lastGeneratedCode;
+            } else {
+                editor.value += "\n\n" + lastGeneratedCode;
+            }
+            updateLineNumbers();
+            closeAIModal();
+            if (window.innerWidth < 768) switchTab('editor');
+        }
+        
+        function copyAIContent() {
+             const text = aiContent.innerText;
+             navigator.clipboard.writeText(text);
+             const originalText = copyBtn.innerText;
+             copyBtn.innerText = "Copied!";
+             setTimeout(() => copyBtn.innerText = originalText, 2000);
+        }
+
+        // --- Core UI & Logic ---
+        const editor = document.getElementById('editor');
+        const terminal = document.getElementById('terminal');
+        const lineNumbers = document.getElementById('line-numbers');
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.getElementById('sidebar-overlay');
+        const runBtn = document.getElementById('run-btn');
+        const statusBadge = document.getElementById('py-status');
+
+        function switchTab(tab) {
+            const paneEditor = document.getElementById('pane-editor');
+            const paneOutput = document.getElementById('pane-output');
+            const tabEditor = document.getElementById('tab-editor');
+            const tabOutput = document.getElementById('tab-output');
+
+            if (tab === 'editor') {
+                paneEditor.classList.remove('hidden');
+                paneOutput.classList.add('hidden');
+                paneOutput.classList.remove('flex');
+                
+                tabEditor.classList.add('text-blue-400', 'border-b-2', 'border-blue-400');
+                tabEditor.classList.remove('text-slate-400');
+                
+                tabOutput.classList.remove('text-blue-400', 'border-b-2', 'border-blue-400');
+                tabOutput.classList.add('text-slate-400');
+            } else {
+                paneEditor.classList.add('hidden');
+                paneOutput.classList.remove('hidden');
+                paneOutput.classList.add('flex');
+                
+                tabOutput.classList.add('text-blue-400', 'border-b-2', 'border-blue-400');
+                tabOutput.classList.remove('text-slate-400');
+                
+                tabEditor.classList.remove('text-blue-400', 'border-b-2', 'border-blue-400');
+                tabEditor.classList.add('text-slate-400');
+            }
+        }
+
+        document.getElementById('menu-btn').addEventListener('click', () => {
+            sidebar.classList.remove('-translate-x-full');
+            sidebarOverlay.classList.remove('hidden');
+        });
+
+        const closeMenu = () => {
+            sidebar.classList.add('-translate-x-full');
+            sidebarOverlay.classList.add('hidden');
+        };
+
+        document.getElementById('close-sidebar').addEventListener('click', closeMenu);
+        sidebarOverlay.addEventListener('click', closeMenu);
+
+        function updateLineNumbers() {
+            const lines = editor.value.split('\n').length;
+            lineNumbers.innerHTML = Array(lines).fill(0).map((_, i) => `<div>${i + 1}</div>`).join('');
+        }
+        
+        function syncScroll() {
+            lineNumbers.scrollTop = editor.scrollTop;
+        }
+        
+        editor.addEventListener('keydown', function(e) {
+            if (e.key == 'Tab') {
+                e.preventDefault();
+                var start = this.selectionStart;
+                var end = this.selectionEnd;
+                this.value = this.value.substring(0, start) + "    " + this.value.substring(end);
+                this.selectionStart = this.selectionEnd = start + 4;
+                updateLineNumbers();
+            }
+        });
+
+        updateLineNumbers();
+
+        // --- Pyodide Logic ---
+        let pyodideInstance = null;
+
+        async function initPyodide() {
+            try {
+                // Secure prompt function to fix Illegal Invocation
+                const securePrompt = (msg) => {
+                    try {
+                        return window.prompt(msg) || "";
+                    } catch (e) {
+                        return "";
+                    }
+                };
+
+                pyodideInstance = await loadPyodide({
+                    stdout: (text) => appendToTerminal(text),
+                    stderr: (text) => appendToTerminal(text, true),
+                    // Safe stdin handler that won't lose context
+                    stdin: () => securePrompt("Python Input:")
+                });
+                
+                statusBadge.innerHTML = `<span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span><span>Ready</span>`;
+                statusBadge.classList.remove('text-yellow-400');
+                statusBadge.classList.add('text-green-400', 'border-green-500/30', 'bg-green-500/10');
+                runBtn.disabled = false;
+                
+                appendToTerminal("Python Ready. Click Run to start!", false, true);
+            } catch (err) {
+                statusBadge.innerHTML = `<span>Error</span>`;
+                statusBadge.classList.add('text-red-500');
+                appendToTerminal(`Engine Error: ${err}`, true);
+            }
+        }
+
+        initPyodide();
+
+        async function runCode() {
+            if (!pyodideInstance) return;
+
+            const code = editor.value;
+            
+            // Auto switch to output on mobile
+            if (window.innerWidth < 768) {
+                switchTab('output');
+            }
+
+            // Clean terminal before run
+            clearConsole();
+            appendToTerminal(">>> Running...", false, true);
+
+            try {
+                await pyodideInstance.runPythonAsync(code);
+            } catch (err) {
+                appendToTerminal(err, true);
+            }
+            
+            appendToTerminal("\n", false);
+        }
+
+        function appendToTerminal(text, isError = false, isSystem = false) {
+            const line = document.createElement('div');
+            
+            if (isError) {
+                line.className = 'text-red-400 font-bold';
+                line.textContent = `Error: ${text}`;
+            } else if (isSystem) {
+                line.className = 'text-slate-500 italic mt-2 mb-1 text-sm font-normal';
+                line.textContent = text;
+            } else {
+                line.className = 'text-green-400';
+                line.textContent = text;
+            }
+
+            terminal.appendChild(line);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        function clearConsole() {
+            terminal.innerHTML = '';
+            // Don't show "Console cleared" if we are about to run code
+            // appendToTerminal("Console cleared.", false, true);
+        }
+
+        // --- Student Examples ---
+        const snippets = {
+            'hello': `print("Hello World!")\nprint("I am coding in Python.")`,
+            'calc': `def add(a, b):\n    return a + b\n\nresult = add(5, 10)\nprint(f"5 + 10 = {result}")\n\n# Try changing numbers above!`,
+            'lists': `shopping_list = ["Apples", "Bananas", "Milk"]\n\nprint("My List:")\nfor item in shopping_list:\n    print(f"- {item}")\n\nshopping_list.append("Cookies")\nprint(f"Added Cookies!")`,
+            'input': `# This will ask for your name\nname = input("What is your name? ")\nprint(f"Nice to meet you, {name}!")`
+        };
+
+        async function loadSnippet(key) {
+            closeMenu();
+            editor.value = snippets[key];
+            updateLineNumbers();
+            if (window.innerWidth < 768) switchTab('editor');
+        }
+
+        lucide.createIcons();
+
+        window.addEventListener('resize', () => {
+            if (window.innerWidth >= 768) {
+                document.getElementById('pane-editor').classList.remove('hidden');
+                document.getElementById('pane-output').classList.remove('hidden', 'flex');
+                document.getElementById('pane-output').classList.add('flex');
+            } else {
+                switchTab('editor');
+            }
+        });
+
+    </script>
+</body>
+</html>
